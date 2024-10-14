@@ -1,10 +1,10 @@
-/* BEGIN Suggested Boilerplate from wayland-book.com */
 #define _POSIX_C_SOURCE 200112L
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
+/* BEGIN Suggested Boilerplate from wayland-book.com */
 
 static void
 randname(char *buf)
@@ -62,102 +62,159 @@ allocate_shm_file(size_t size)
 /* LINUX-specific Includes */
 /* wayland */
 #include <wayland-client.h>
-// #include <xdg-shell.h>
+#include "generated/xdg-shell-client.h"
+#include "generated/xdg-shell-client.c"
+/* project includes */
+/* [h] files */
+//#include "base/base.h"
+
+/* [c] files */
+// #include "base/base.c"
 
 typedef uint32_t u32;
 
 #define _global static
 #define _internal static
 
-struct wayland_state {
-    struct wl_compositor* compositor;
-    struct wl_shm*        shm;
+struct client_state {
+    /* globals */
+    struct wl_display*    _wl_display;
+    struct wl_registry*   _wl_registry;
+    struct wl_shm*        _wl_shm;
+    struct wl_compositor* _wl_compositor;
+    struct xdg_wm_base*     _xdg_wm_base;
+    /* objects */
+    struct wl_surface*    _wl_surface;
+    struct xdg_surface*   _xdg_surface;
+    struct xdg_toplevel*  _xdg_toplevel;
 };
 
-_global void registry_handle_global(void* data, struct wl_registry* wl_registry, u32 name, const char* interface, u32 version) {
-    struct wayland_state* state = data;
-    if (!strcmp(interface, wl_compositor_interface.name)) {
-        state->compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, 4);
-    }
-    if (!strcmp(interface, wl_shm_interface.name)) {
-        state->shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, 1);
-    }
-    printf("Interface: %s, version: %d, name: %d\n", interface, version, name);
-    printf("\n  ::      ...sup\n\n");
-    printf("Data ptr: %p, Reg ptr: %p\n", data, (void*) wl_registry);
-    printf("\n  ::      ...o'er dere!!!\n\n");
+_global void wl_buffer_release(void *data, struct wl_buffer *wl_buffer) {
+    /* Sent by the compositor when it's no longer using this buffer */
+    printf("  :: Releasing buffer:\n   > data: %p\n   > buffer: %p\n", data, (void*) wl_buffer);
+    wl_buffer_destroy(wl_buffer);
 }
 
-_global void registry_handle_global_remove(void* data, struct wl_registry* wl_registry, u32 name) {
+_global const struct wl_buffer_listener wl_buffer_listener = {
+    .release = wl_buffer_release,
+};
+
+_global struct wl_buffer* draw_frame(struct client_state *state) {
+    const int width = 960, height = 540;
+    const int stride = width * 4;
+    const int size = height * stride;
+    
+    int fd = allocate_shm_file(size);
+    if (fd == -1) {
+        return nullptr;
+    }
+
+    u32* data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    
+    if (data == MAP_FAILED) {
+        close(fd);
+        return nullptr;
+    }
+
+    struct wl_shm_pool* pool = wl_shm_create_pool(state->_wl_shm, fd, size);
+
+    struct wl_buffer* buffer = wl_shm_pool_create_buffer(pool, 0, width, height, stride, WL_SHM_FORMAT_XRGB8888);
+
+    /* Checkerboard background */
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if ((x + y / 8 * 8) % 16 < 8) {
+                data[y * width + x] = 0xFF666666;
+            } else {
+                data[y * width + x] = 0xFFEEEEEE;
+            }
+        }
+    }
+    munmap(data, size);
+    wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
+    return buffer;
+}
+
+_global void xdg_surface_configure(void* data, struct xdg_surface* xdg_surface, u32 serial) {
+    struct client_state* state = data;
+    xdg_surface_ack_configure(xdg_surface, serial);
+    
+    struct wl_buffer* buffer = draw_frame(state);
+    wl_surface_attach(state->_wl_surface, buffer, 0, 0);
+    wl_surface_commit(state->_wl_surface);
+}
+
+_global const struct xdg_surface_listener _xdg_surface_listener = {
+    .configure = xdg_surface_configure,
+};
+
+_global void xdg_wm_base_ping(void* data, struct xdg_wm_base* xdg_wm_base, u32 serial) {
+    printf("  > LOG: xdg_wm_base pinging from data at: %p ", data);
+    xdg_wm_base_pong(xdg_wm_base, serial);
+}
+
+_global const struct xdg_wm_base_listener _xdg_wm_base_listener = {
+    .ping = xdg_wm_base_ping,
+};
+
+_global void registry_global(void* data, struct wl_registry* wl_registry, u32 name, const char* interface, u32 version) {
+    struct client_state* state = data;
+    if (!strcmp(interface, wl_shm_interface.name)) {
+        state->_wl_shm = wl_registry_bind(wl_registry, name, &wl_shm_interface, 1);
+    } else if (!strcmp(interface, wl_compositor_interface.name)) {
+        state->_wl_compositor = wl_registry_bind(wl_registry, name, &wl_compositor_interface, 4);
+    } else if (!strcmp(interface, "xdg_wm_base")) {
+        state->_xdg_wm_base = wl_registry_bind(wl_registry, name, &xdg_wm_base_interface, 1);
+        xdg_wm_base_add_listener(state->_xdg_wm_base, &_xdg_wm_base_listener, state);
+    }
+    printf("Interface: %s, version: %d, name: %d\n", interface, version, name);
+}
+
+_global void registry_global_remove(void* data, struct wl_registry* wl_registry, u32 name) {
     printf("Name: %d, Data ptr: %p, Reg ptr: %p\n", name, data, (void*) wl_registry);
 }
 
-_global const struct wl_registry_listener registry_listener = {
-    .global = registry_handle_global,
-    .global_remove = registry_handle_global_remove,
+_global const struct wl_registry_listener wl_registry_listener = {
+    .global = registry_global,
+    .global_remove = registry_global_remove,
 };
 
 int main(void) {
-    struct wayland_state state = {};
-    struct wl_display* display = nullptr;
-    display = wl_display_connect(NULL);
-    if (!display) {
+    struct client_state state = {};
+
+    state._wl_display = wl_display_connect(NULL);
+    if (!state._wl_display) {
         fprintf(stderr, "Could not find a display to connect to!!\n");
         goto exit;
     }
     printf("Connected to a display!\n");
-    struct wl_registry* registry = nullptr;
-    registry = wl_display_get_registry(display);
-    if (!registry) {
+
+    state._wl_registry = wl_display_get_registry(state._wl_display);
+    if (!state._wl_registry) {
         fprintf(stderr, "Failed to get display's registry!!\n");
         goto display_cleanup;
     }
 
-    wl_registry_add_listener(registry, &registry_listener, &state);
-    wl_display_roundtrip(display);
-    struct wl_surface *surface = wl_compositor_create_surface(state.compositor);
+    wl_registry_add_listener(state._wl_registry, &wl_registry_listener, &state);
+    wl_display_roundtrip(state._wl_display);
+    state._wl_surface = wl_compositor_create_surface(state._wl_compositor);
 
-    const int width = 1920, height = 1080;
-    const int stride = width * 4;
-    const int shm_pool_size = height * stride * 2;
+    state._xdg_surface = xdg_wm_base_get_xdg_surface(state._xdg_wm_base, state._wl_surface);
+    state._xdg_toplevel = xdg_surface_get_toplevel(state._xdg_surface);
+
+    xdg_surface_add_listener(state._xdg_surface, &_xdg_surface_listener, &state);
+
+    xdg_toplevel_set_title(state._xdg_toplevel, "Simp Client");
     
-    int fd = allocate_shm_file(shm_pool_size);
-    uint8_t *pool_data = mmap(NULL, shm_pool_size,
-        PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    
-    struct wl_shm* shm = nullptr; // Bound from registry
-    printf("  ::>> Hi there!!!\n\n");
-    struct wl_shm_pool* pool = wl_shm_create_pool(shm, fd, shm_pool_size);
+    wl_surface_commit(state._wl_surface);
 
-
-    /* white filled buffer */
-    int index = 0;
-    int offset = height * stride * index;
-    struct wl_buffer *buffer = wl_shm_pool_create_buffer(pool, offset, width, height, stride, WL_SHM_FORMAT_XRGB8888);
-
-    uint32_t *pixels = (uint32_t *)&pool_data[offset];
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            if ((x + y / 8 * 8) % 16 < 8) {
-                pixels[y * width + x] = 0xFF666666;
-            } else {
-                pixels[y * width + x] = 0xFFEEEEEE;
-            }
-        }
+    while (wl_display_dispatch(state._wl_display)) {
+        /* Await input */
+        draw_frame(&state);
     }
-    
-    wl_surface_attach(surface, buffer, 0, 0);
-    wl_surface_damage(surface, 0, 0, UINT32_MAX, UINT32_MAX);
-    wl_surface_commit(surface);
-
-
-    // for (;;) {
-    //     if (wl_display_dispatch(display) == -1) 
-    //         goto display_cleanup;
-    // }
 
 display_cleanup:
-    wl_display_disconnect(display);
+    wl_display_disconnect(state._wl_display);
     printf("Disconnected from display!\n");
 
 exit:

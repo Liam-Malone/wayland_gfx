@@ -18,6 +18,7 @@
             gcc
             gdb
             valgrind
+            wayland-scanner
             zig
           ];
           buildInputs = with pkgs; [
