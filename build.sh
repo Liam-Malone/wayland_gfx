@@ -10,11 +10,28 @@ fi
 
 mkdir -p bin
 
-if [ -v gen ] || ! [ -f src/generated/xdg-shell-client.h ]; then
-    echo " :: Generating XDG client shell header and source ::"
+# :: BEGIN Wayland Codegen ::
+# Wayland Protocol Header Generation
+if [ -v gen ] || ! [ -f src/generated/xdg-client.h ]; then
+    echo " :: Generating XDG client header ::"
     wayland-scanner client-header protocols/wayland/xdg-shell.xml src/generated/xdg-shell-client.h
+fi
+if [ -v gen ] || ! [ -f src/generated/presentation-time.h ]; then
+    echo " :: Generating presentation-time header ::"
+    wayland-scanner client-header protocols/wayland/xdg-shell.xml src/generated/presentation-time.h
+fi
+
+
+# Wayland Protocol Source Generation
+if [ -v gen ] || ! [ -f src/generated/xdg-client.c ]; then
+    echo " :: Generating XDG client source ::"
     wayland-scanner private-code protocols/wayland/xdg-shell.xml src/generated/xdg-shell-client.c
 fi
+if [ -v gen ] || ! [ -f src/generated/presentation-time.c ]; then
+        echo " :: Generating presentation-time source ::"
+        wayland-scanner private-code protocols/wayland/xdg-shell.xml src/generated/presentation-time.c
+fi
+# :: END Wayland Codegen ::
 
 out=bin/simp
 

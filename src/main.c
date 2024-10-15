@@ -1,10 +1,11 @@
+/* BEGIN Suggested Boilerplate from wayland-book.com */
+/* TODO: Write my own code for this */
 #define _POSIX_C_SOURCE 200112L
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-/* BEGIN Suggested Boilerplate from wayland-book.com */
 
 static void
 randname(char *buf)
@@ -62,8 +63,12 @@ allocate_shm_file(size_t size)
 /* LINUX-specific Includes */
 /* wayland */
 #include <wayland-client.h>
-#include "generated/xdg-shell-client.h"
-#include "generated/xdg-shell-client.c"
+#include "generated/xdg-client.h"
+#include "generated/xdg-client.c"
+/* #include "generated/presentation-time.h" */
+/* #include "generated/presentation-time.c" */
+/* TODO: Implement presentation-time for frame-timings */
+
 /* project includes */
 /* [h] files */
 //#include "base/base.h"
@@ -197,15 +202,14 @@ int main(void) {
 
     wl_registry_add_listener(state._wl_registry, &wl_registry_listener, &state);
     wl_display_roundtrip(state._wl_display);
-    state._wl_surface = wl_compositor_create_surface(state._wl_compositor);
 
+    state._wl_surface = wl_compositor_create_surface(state._wl_compositor);
     state._xdg_surface = xdg_wm_base_get_xdg_surface(state._xdg_wm_base, state._wl_surface);
     state._xdg_toplevel = xdg_surface_get_toplevel(state._xdg_surface);
 
     xdg_surface_add_listener(state._xdg_surface, &_xdg_surface_listener, &state);
-
     xdg_toplevel_set_title(state._xdg_toplevel, "Simp Client");
-    
+
     wl_surface_commit(state._wl_surface);
 
     while (wl_display_dispatch(state._wl_display)) {
