@@ -52,7 +52,7 @@ fi
 
 defines="\
     -D_wayland_                     \
-    -Dwl_shm_interface_ver=2        \
+    -Dwl_shm_interface_ver=1        \
     -Dwl_compositor_interface_ver=5 \
     -Dxdg_wm_base_interface_ver=6   \
     -Dwl_seat_interface_ver=7       

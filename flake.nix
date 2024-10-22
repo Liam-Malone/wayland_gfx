@@ -17,6 +17,7 @@
             clang
             gcc
             gdb
+            libxkbcommon
             pkg-config
             valgrind
             wayland
@@ -25,8 +26,7 @@
             zig
           ];
           buildInputs = with pkgs; [
-            clang
-            gcc
+            libxkbcommon
             mesa
             wayland
             zig
