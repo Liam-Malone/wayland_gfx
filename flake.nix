@@ -17,7 +17,10 @@
             clang
             gcc
             gdb
+            pkg-config
             valgrind
+            wayland
+            wayland-protocols
             wayland-scanner
             zig
           ];

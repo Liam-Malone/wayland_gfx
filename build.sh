@@ -2,10 +2,16 @@ for arg in "$@"; do
     declare $arg='1'
 done
 
+cflags='-std=c23'
+debug_flags='-g -D_debug_'
+release_flags='-O3 -D_release_'
+
 if [ -v release ]; then
     echo "[ Release Mode ]"
+    cflags="$cflags $release_flags"
 else
     echo "[ Debug Mode ]"
+    cflags="$cflags $debug_flags"
 fi
 
 mkdir -p bin
@@ -36,8 +42,7 @@ fi
 out=bin/simp
 
 compiler='zig cc'
-cflags='-std=c23'
-libs='-lwayland-client -lc'
+libs=' -lc -lwayland-client -lxkbcommon'
 
 if [ -v e ]; then
     cflags="$cflags"
@@ -45,10 +50,13 @@ else
     cflags="$cflags -Werror -Wall -Wextra -pedantic"
 fi
 
-defines='-D_wayland_'
-
-debug_flags='-g -D_debug_'
-release_flags='-O3 -D_release_'
+defines="\
+    -D_wayland_                     \
+    -Dwl_shm_interface_ver=2        \
+    -Dwl_compositor_interface_ver=5 \
+    -Dxdg_wm_base_interface_ver=6   \
+    -Dwl_seat_interface_ver=7       
+"
 
 built=0
 compile="$compiler -o $out $cflags $defines"
